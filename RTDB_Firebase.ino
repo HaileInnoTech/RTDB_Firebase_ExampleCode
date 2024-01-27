@@ -1,39 +1,32 @@
-#include <Arduino.h>
-#if defined(ESP32)
-  #include <WiFi.h>
-#elif defined(ESP8266)
-  #include <ESP8266WiFi.h>
-#endif
+#include <DHT.h>
+#include <ESP8266WiFi.h>
 #include <Firebase_ESP_Client.h>
-
-//Provide the token generation process info.
 #include "addons/TokenHelper.h"
-//Provide the RTDB payload printing info and other helper functions.
 #include "addons/RTDBHelper.h"
 
-// Insert your network credentials
-#define WIFI_SSID "NWVHCM"
-#define WIFI_PASSWORD "N@viiw9rld789#"
+#define WIFI_SSID "paPOCOF3"
+#define WIFI_PASSWORD "12345678"
 
-// Insert Firebase project API Key
-#define API_KEY "AIzaSyAp7oKoBii7Hoy_AzPeoMKj4dzCmAJzDAQ"
+#define DHTPIN 2       // Pin connected to DHT11 data pin
+#define DHTTYPE DHT11   // DHT sensor type (DHT11 or DHT22)
 
-// Insert RTDB URLefine the RTDB URL */
-#define DATABASE_URL "https://fingerprintdb3-default-rtdb.firebaseio.com/" 
+#define API_KEY "AIzaSyAOmVngCIDg_WpMykay6NeKttHJPDu0pHc"
+#define DATABASE_URL "smart-farming-system-f9435-default-rtdb.asia-southeast1.firebasedatabase.app/"
+#define USER_EMAIL "hai28022002@gmail.com"
+#define USER_PASSWORD "Hoanghai___2002"
 
-//Define Firebase Data object
 FirebaseData fbdo;
-
 FirebaseAuth auth;
 FirebaseConfig config;
-
 unsigned long sendDataPrevMillis = 0;
-int count = 0;
-bool signupOK = false;
+unsigned long count = 0;
 
-void setup(){
-  Serial.begin(115200);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+DHT dht(DHTPIN, DHTTYPE);
+
+void setup() {
+  Serial.begin(9600);
+  dht.begin();
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   Serial.print("Connecting to Wi-Fi");
   while (WiFi.status() != WL_CONNECTED){
     Serial.print(".");
@@ -42,55 +35,37 @@ void setup(){
   Serial.println();
   Serial.print("Connected with IP: ");
   Serial.println(WiFi.localIP());
-  Serial.println();
-
-  /* Assign the api key (required) */
-  config.api_key = API_KEY;
-
-  /* Assign the RTDB URL (required) */
-  config.database_url = DATABASE_URL;
-
-  /* Sign up */
-  if (Firebase.signUp(&config, &auth, "", "")){
-    Serial.println("ok");
-    signupOK = true;
-  }
-  else{
-    Serial.printf("%s\n", config.signer.signupError.message.c_str());
-  }
-
-  /* Assign the callback function for the long running token generation task */
-  config.token_status_callback = tokenStatusCallback; //see addons/TokenHelper.h
-  
-  Firebase.begin(&config, &auth);
-  Firebase.reconnectWiFi(true);
+  Serial.printf("Firebase Client v%s\n\n", FIREBASE_CLIENT_VERSION);
+    config.api_key = API_KEY;
+    auth.user.email = USER_EMAIL;
+    auth.user.password = USER_PASSWORD;
+    config.database_url = DATABASE_URL;
+    config.token_status_callback = tokenStatusCallback; // see addons/TokenHelper.h
+    fbdo.setBSSLBufferSize(4096, 1024);
+    // Connect to RTDB
+    Firebase.begin(&config, &auth);
+    Firebase.reconnectNetwork(true);
 }
 
-void loop(){
-  if (Firebase.ready() && signupOK && (millis() - sendDataPrevMillis > 15000 || sendDataPrevMillis == 0)){
-    sendDataPrevMillis = millis();
-    // Write an Int number on the database path test/int
-    if (Firebase.RTDB.setInt(&fbdo, "test/int", count)){
-      Serial.println("PASSED");
-      Serial.println("PATH: " + fbdo.dataPath());
-      Serial.println("TYPE: " + fbdo.dataType());
+void loop()
+{
+    if (Firebase.ready() && (millis() - sendDataPrevMillis > 15000 || sendDataPrevMillis == 0)) 
+    {
+        sendDataPrevMillis = millis();
+        storeDHTData();
     }
-    else {
-      Serial.println("FAILED");
-      Serial.println("REASON: " + fbdo.errorReason());
-    }
-    count++;
-    
-    // Write an Float number on the database path test/float
-    if (Firebase.RTDB.setFloat(&fbdo, "test/float", 0.01 + random(0,100))){
-      if(Firecase.)
-      Serial.println("PASSED");
-      Serial.println("PATH: " + fbdo.dataPath());
-      Serial.println("TYPE: " + fbdo.dataType());
-    }
-    else {
-      Serial.println("FAILED");
-      Serial.println("REASON: " + fbdo.errorReason());
-    }
+}
+
+void storeDHTData() {
+  float temperature = dht.readTemperature();    // Read temperature in Celsius
+  float humidity = dht.readHumidity();          // Read humidity
+  if (isnan(temperature) || isnan(humidity)) {
+    Serial.println("Failed to read from DHT sensor!");
+    return;
   }
+  unsigned long currentTime = millis();
+
+  Firebase.RTDB.pushFloat(&fbdo,"/Temp-Humid/temperature", temperature);
+  Firebase.RTDB.pushFloat(&fbdo,"/Temp-Humid/humidity", humidity);
+  Firebase.RTDB.pushString(&fbdo,"/Temp-Humid/timestamp", currentTime);
 }
